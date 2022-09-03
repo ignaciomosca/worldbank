@@ -1,6 +1,6 @@
 package com.worldbank
 
-import cats.FlatMap
+import cats.{FlatMap, Parallel}
 import cats.effect.Async
 import doobie.util.transactor.Transactor
 import org.http4s.ember.client.EmberClientBuilder
@@ -12,7 +12,7 @@ object WorldBankServer {
 //    case "query" => query(xa)
 //  }
 
-  def ingestion[F[_]: Async](xa: Transactor[F]): F[Unit] = {
+  def ingestion[F[_]: Async: Parallel](xa: Transactor[F]): F[Unit] = {
     EmberClientBuilder.default[F].build.use{ client =>
       val worldBank = WorldBankRepo.impl(xa)
       val ingestion = Ingestion.impl(client, worldBank)

@@ -1,12 +1,14 @@
 package com.worldbank
 
+import cats.Parallel
 import cats.effect.Concurrent
 import cats.implicits._
-import cats.instances.list._
 import com.worldbank.IngestionEntities.{WorldBankGDPData, WorldBankPopulationData}
 import org.http4s._
 import org.http4s.client.Client
 import org.http4s.implicits._
+
+import scala.concurrent.ExecutionContext.Implicits.global
 
 trait Ingestion[F[_]] {
   def ingestData: F[Unit]
@@ -14,7 +16,7 @@ trait Ingestion[F[_]] {
 
 object Ingestion {
   def apply[F[_]: Concurrent](implicit ev: Ingestion[F]): Ingestion[F] = ev
-  def impl[F[_]: Concurrent](client: Client[F], repo: WorldBankRepo[F]): Ingestion[F] = new Ingestion[F] {
+  def impl[F[_]: Concurrent: Parallel](client: Client[F], repo: WorldBankRepo[F]): Ingestion[F] = new Ingestion[F] {
     val baseUri = uri"https://api.worldbank.org/v2/country/all/indicator"
     val totalPopulationUri = baseUri / "SP.POP.TOTL"
     val gdpUri = baseUri / "NY.GDP.MKTP.CD"
@@ -22,12 +24,11 @@ object Ingestion {
     def ingestData: F[Unit] = {
       println("Ingesting")
       // TODO try to parallelize both sets of requests
-      //Parallel.parProduct(getTotalPopulationData(), getGDPData())
-      //List(getTotalPopulationData(), getGDPData()).parSequence
-      for {
-        populationData <- getTotalPopulationData()
-        gdpData <- getGDPData()
-      } yield()
+      List(getTotalPopulationData(), getGDPData()).parSequence_
+//      for {
+//        populationData <- getTotalPopulationData()
+//        gdpData <- getGDPData()
+//      }
     }
 
     private def getTotalPagesForPopulationRequest() = {
