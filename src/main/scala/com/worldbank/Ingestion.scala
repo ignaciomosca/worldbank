@@ -3,33 +3,25 @@ package com.worldbank
 import cats.Parallel
 import cats.effect.Concurrent
 import cats.implicits._
-import com.worldbank.IngestionEntities.{WorldBankGDPData, WorldBankPopulationData}
+import com.worldbank.IngestionEntities.{WorldBankCountriesData, WorldBankGDPData, WorldBankPopulationData}
 import org.http4s._
 import org.http4s.client.Client
 import org.http4s.implicits._
-
-import scala.concurrent.ExecutionContext.Implicits.global
 
 trait Ingestion[F[_]] {
   def ingestData: F[Unit]
 }
 
 object Ingestion {
-  def apply[F[_]: Concurrent](implicit ev: Ingestion[F]): Ingestion[F] = ev
   def impl[F[_]: Concurrent: Parallel](client: Client[F], repo: WorldBankRepo[F]): Ingestion[F] = new Ingestion[F] {
     val baseUri = uri"https://api.worldbank.org/v2/country/all/indicator"
+    val countryUri = uri"https://api.worldbank.org/v2/country"
+
     val totalPopulationUri = baseUri / "SP.POP.TOTL"
     val gdpUri = baseUri / "NY.GDP.MKTP.CD"
 
-    def ingestData: F[Unit] = {
-      println("Ingesting")
-      // TODO try to parallelize both sets of requests
-      List(getTotalPopulationData(), getGDPData()).parSequence_
-//      for {
-//        populationData <- getTotalPopulationData()
-//        gdpData <- getGDPData()
-//      }
-    }
+
+    def ingestData: F[Unit] = List(getTotalPopulationData(), getGDPData(), getCountries()).parSequence_
 
     private def getTotalPagesForPopulationRequest() = {
       println("Pages for getTotalPagesForPopulationRequest")
@@ -41,6 +33,27 @@ object Ingestion {
             Concurrent[F].pure(List())
         }
       result
+    }
+
+    def getTotalCountriesRequest() = {
+      val request = Request[F](Method.GET, countryUri.withQueryParam("format", "json").withQueryParam("page", "1"))
+      val result = client
+        .expect[WorldBankCountriesData](request).map(_.pageStats.pages).map(n => 1 to n).map(_.toList)
+        .recoverWith { e =>
+          println(s"Error getting Pages for getCountries. Error ${e.toString}")
+          Concurrent[F].pure(List())
+        }
+      result
+    }
+
+    private def getCountryRequest(page: Int) = {
+      val request = Request[F](Method.GET, countryUri.withQueryParam("format", "json").withQueryParam("page", page.toString))
+      client
+        .expect[WorldBankCountriesData](request).flatMap(worldCountryData => repo.saveCountryData(worldCountryData.data))
+        .recoverWith { e =>
+          println(s"Failed getCountryRequest. Error ${e.toString}")
+          Concurrent[F].pure(0)
+        }
     }
 
     private def getTotalPagesForGDPRequest() = {
@@ -88,6 +101,14 @@ object Ingestion {
       println("Total GDP data")
         getTotalPagesForGDPRequest().flatMap {list => list.map{
           page => getTotalGDPRequest(page)
+        }.sequence
+      }
+    }
+
+    def getCountries(): F[List[Int]] = {
+      println("Total Country data")
+      getTotalCountriesRequest().flatMap { list => list.map {
+          page => getCountryRequest(page)
         }.sequence
       }
     }

@@ -25,7 +25,7 @@ object WorldBankServer {
 //    val query = Query.impl(worldBank)
 //    for {
 //      worldGDP <- query.queryWorldDP()
-//      worldPopulation <- query.queryWorldPopulation()
+//      worldPopulation <- query.queryWorldPopulation(worldGDP)
 //    } yield worldGDP ++ worldPopulation
 //  }
 }

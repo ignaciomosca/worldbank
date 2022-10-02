@@ -12,7 +12,7 @@ object InitializeDatabase {
 
     val dropGDP = sql"""DROP TABLE IF EXISTS gdp""".update
 
-    val droppopulationresult = sql"""DROP TABLE IF EXISTS populationresult""".update
+    val dropCountries = sql"""DROP TABLE IF EXISTS countries""".update
 
     val createPopulationTable =
       sql"""
@@ -21,6 +21,16 @@ object InitializeDatabase {
    value            INT,
    year        TEXT,
    country         TEXT);
+  """.update
+
+    val createCountriesTable =
+      sql"""
+    CREATE TABLE IF NOT EXISTS countries(
+   countryiso3code           TEXT    NOT NULL,
+   name            TEXT NOT NULL,
+   capitalCity        TEXT,
+   latitude        TEXT,
+   longitude         TEXT);
   """.update
 
     val createGDPTable =
@@ -32,19 +42,13 @@ object InitializeDatabase {
    country         TEXT);
   """.update
 
-    val createPopulationResultTable =
-      sql"""
-    CREATE TABLE IF NOT EXISTS populationresult(
-   countryiso3code           TEXT    NOT NULL);
-  """.update
-
     for {
-      drop0 <- droppopulationresult.run.transact(xa)
-      drop1 <- dropPopulation.run.transact(xa)
-      drop2 <- dropGDP.run.transact(xa)
-      result0 <- createPopulationTable.run.transact(xa)
-      result1 <- createPopulationResultTable.run.transact(xa)
-      result2 <- createGDPTable.run.transact(xa)
-    } yield (drop0, drop1, drop2, result0, result1, result2)
+      dropPopulation <- dropPopulation.run.transact(xa)
+      dropGDP <- dropGDP.run.transact(xa)
+      dropCountries <- dropCountries.run.transact(xa)
+      createPopulationTable <- createPopulationTable.run.transact(xa)
+      createGDPTable <- createGDPTable.run.transact(xa)
+      createCountriesTable <- createCountriesTable.run.transact(xa)
+    } yield (dropPopulation, dropGDP, dropCountries, createPopulationTable, createGDPTable, createCountriesTable)
   }
 }

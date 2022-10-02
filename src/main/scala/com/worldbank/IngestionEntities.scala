@@ -11,14 +11,20 @@ import org.http4s.{EntityDecoder, EntityEncoder}
 
 object IngestionEntities {
   final case class PageStats(page: Int, pages: Int, per_page: Int, total: Int, sourceid: String, sourcename: String, lastupdated: String)
+  final case class CountryPageStats(page: Int, pages: Int, per_page: Int, total: Int)
   final case class Error(reason: String, statusCode: Int)
   final case class Indicator(id: String, value: String)
   final case class Country(id: String, value: String)
+
+  final case class CountryData(id: String, name: String, capitalCity: String, latitude: String, longitude: String)
+
+
   final case class Population(indicator: Indicator, country: Country, countryiso3code: String, date: String, value: Option[Long], unit: String, obs_status:String, decimal: Int)
   final case class GDP(indicator: Indicator, country: Country, countryiso3code: String, date: String, value: Option[Double], unit: String, obs_status:String, decimal: Int)
   final case class WorldBankPopulationData(pageStats: PageStats, populationData: List[Population])
   final case class WorldBankGDPData(pageStats: PageStats, populationData: List[GDP])
   final case class RealWorldBankData(body: List[WorldBankPopulationData])
+  final case class WorldBankCountriesData(pageStats: CountryPageStats, data: List[CountryData])
   final case class WorldBankException(message: String, status: Int) extends RuntimeException
 
   // Encoders & Decoders
@@ -47,7 +53,7 @@ object IngestionEntities {
   implicit val RealWorldBankDataDecoder: Decoder[RealWorldBankData]                                                        = deriveDecoder[RealWorldBankData]
   implicit val RealWorldBankDataEncoder: Encoder[RealWorldBankData]                                                        = deriveEncoder[RealWorldBankData]
   implicit def RealWorldBankDataEntityDecoder[F[_]: Concurrent]: EntityDecoder[F, RealWorldBankData]                             = jsonOf
-
+  implicit def RealWorldBankCountryDataEntityDecoder[F[_]: Concurrent]: EntityDecoder[F, WorldBankCountriesData]                             = jsonOf
   implicit val ListWorldBankDataDecoder: Decoder[WorldBankPopulationData] = new Decoder[WorldBankPopulationData] {
     final def apply(c: HCursor): Decoder.Result[WorldBankPopulationData] =
       for {
@@ -57,6 +63,20 @@ object IngestionEntities {
         WorldBankPopulationData(pageStats, populationList)
       }
   }
+
+  implicit val worldBankCountriesDataEncoder: Encoder[WorldBankCountriesData] = deriveEncoder[WorldBankCountriesData]
+  implicit val ListWorldBankCountriesDataDecoder: Decoder[WorldBankCountriesData] = new Decoder[WorldBankCountriesData] {
+    final def apply(c: HCursor): Decoder.Result[WorldBankCountriesData] =
+      for {
+        pageStats <- c.downN(0).as[CountryPageStats]
+        countryList <- c.downN(1).as[List[CountryData]]
+      } yield {
+        WorldBankCountriesData(pageStats, countryList)
+      }
+  }
+
+
+
 
   implicit val GDPEncoder: Encoder[GDP]                                                        = deriveEncoder[GDP]
   implicit def GDPDataEntityDecoder[F[_]: Concurrent]: EntityDecoder[F, WorldBankGDPData]                             = jsonOf

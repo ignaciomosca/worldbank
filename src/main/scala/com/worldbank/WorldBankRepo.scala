@@ -2,15 +2,15 @@ package com.worldbank
 
 import cats.effect._
 import cats.implicits._
-import com.worldbank.DBEntities.{DBGDP, DBPopulation, DBPopulationData}
-import com.worldbank.IngestionEntities.{GDP, Population}
+import com.worldbank.DBEntities.{DBCountryData, DBGDP, DBPopulation, DBPopulationData}
+import com.worldbank.IngestionEntities.{CountryData, GDP, Population}
 import com.worldbank.QueryEntities.QueryResult
 import doobie._
 import doobie.implicits._
 
-import scala.collection.immutable.List
 
 trait WorldBankRepo[F[_]] {
+  def saveCountryData(data: List[CountryData]): F[Int]
   def savePopulationData(populationData: List[Population]): F[Int]
   def saveGDPData(gdpData: List[GDP]): F[Int]
   def top10PopulationGrowth(): F[List[QueryResult]]
@@ -19,6 +19,14 @@ trait WorldBankRepo[F[_]] {
 
 object WorldBankRepo {
   def impl[F[_]: Concurrent](xa: Transactor[F]) = new WorldBankRepo[F] {
+
+    override def saveCountryData(countryData: List[CountryData]): F[Int] = {
+      val sql = "insert into countries (countryiso3code, name, capitalCity, latitude, longitude) values (?, ?, ?, ?, ?)"
+      val trx = Update[DBCountryData](sql).updateMany(countryData.map(DBEntities.toDBCountryData))
+      trx.transact(xa).recoverWith { _ =>
+        Concurrent[F].pure(0)
+      }
+    }
 
     override def savePopulationData(populationData: List[Population]): F[Int] = {
       val sql = "insert into population (countryiso3code, value, year, country) values (?, ?, ?, ?)"
@@ -36,6 +44,18 @@ object WorldBankRepo {
       }
     }
 
+    /**
+     * select country, sum(result.growth) as grow from (select country, countryiso3code, value - lag(value) over (order by year) as growth
+     *  from population
+     *  where year between 2010 and 2018 and countryiso3code NOT IN ('LMY',
+     *  'MIC',
+     *  'WLD',
+     *  'IBD',
+     *  'EAR',
+     *  'SAS',
+     *  'IBT',
+     *  'OED', 'EAS', 'TSA', 'EAP', 'TEA')) result where countryiso3code = result.countryiso3code group by countryiso3code order by grow desc;
+     * */
     override def top10PopulationGrowth(): F[List[QueryResult]] = {
       val q =
         sql"""
