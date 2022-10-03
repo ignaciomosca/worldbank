@@ -1,11 +1,10 @@
 package com.worldbank
 
-import cats.kernel.Monoid
 import com.worldbank.QueryEntities.QueryResult
 
 trait Query[F[_]]{
   def queryWorldPopulation(): F[List[QueryResult]]
-  def queryWorldDP(): F[List[QueryResult]]
+  def queryWorldDP(countryCodes: List[QueryResult]): F[List[QueryResult]]
 }
 
 object Query {
@@ -15,8 +14,8 @@ object Query {
     def queryWorldPopulation(): F[List[QueryResult]] =
       repo.top10PopulationGrowth()
 
-    def queryWorldDP(): F[List[QueryResult]] =
-      repo.top3GDBGrowth()
+    def queryWorldDP(countryCodes: List[QueryResult]): F[List[QueryResult]] =
+      repo.top3GDBGrowth(countryCodes.map(_.countryiso3code))
 
   }
 }

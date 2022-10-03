@@ -5,8 +5,10 @@ import cats.implicits._
 import com.worldbank.DBEntities.{DBCountryData, DBGDP, DBPopulation, DBPopulationData}
 import com.worldbank.IngestionEntities.{CountryData, GDP, Population}
 import com.worldbank.QueryEntities.QueryResult
-import doobie._
+import doobie.{Fragments, _}
+import Fragments.{ in, whereAndOpt }
 import doobie.implicits._
+import doobie.util.ExecutionContexts
 
 
 trait WorldBankRepo[F[_]] {
@@ -14,7 +16,7 @@ trait WorldBankRepo[F[_]] {
   def savePopulationData(populationData: List[Population]): F[Int]
   def saveGDPData(gdpData: List[GDP]): F[Int]
   def top10PopulationGrowth(): F[List[QueryResult]]
-  def top3GDBGrowth(): F[List[QueryResult]]
+  def top3GDBGrowth(countryList: List[String]): F[List[QueryResult]]
 }
 
 object WorldBankRepo {
@@ -44,62 +46,34 @@ object WorldBankRepo {
       }
     }
 
-    /**
-     * select country, sum(result.growth) as grow from (select country, countryiso3code, value - lag(value) over (order by year) as growth
-     *  from population
-     *  where year between 2010 and 2018 and countryiso3code NOT IN ('LMY',
-     *  'MIC',
-     *  'WLD',
-     *  'IBD',
-     *  'EAR',
-     *  'SAS',
-     *  'IBT',
-     *  'OED', 'EAS', 'TSA', 'EAP', 'TEA')) result where countryiso3code = result.countryiso3code group by countryiso3code order by grow desc;
-     * */
     override def top10PopulationGrowth(): F[List[QueryResult]] = {
       val q =
         sql"""
-          select p1.countryiso3code, (100.0 * (p2.value - p1.value) / p1.value ) as growth
-          from population as p1
-          inner join population as p2
-            on p1.countryiso3code = p2.countryiso3code and p1.year = 2010 and p2.year = 2018 and p1.countryiso3code <> ''
-          order by growth desc
-          limit 10;
+          select countryiso3code, sum(value) as grow from population
+        where countryiso3code = countryiso3code
+          and countryiso3code NOT IN (select countryiso3code from countries where capitalCity = '')
+          and `year` between 2010 and 2018 and countryiso3code is not '' group by countryiso3code order by grow desc
+        limit 10
         """
+      val result = q.query[QueryResult].to[List].transact(xa)
 
-      for {
-        r <- q.query[QueryResult].to[List].transact(xa)
-        _ <- saveToPopulationResultData(r)
-      } yield(r)
-    }
-
-    override def top3GDBGrowth(): F[List[QueryResult]] = {
-      val q =
-        sql"""
-          select p1.countryiso3code, (100.0 * (p2.value - p1.value) / p1.value ) as growth
-          from gdp as p1
-          inner join gdp as p2
-            on p1.countryiso3code = p2.countryiso3code and p1.year = 2010 and p2.year = 2018 and p1.countryiso3code <> '' and p1.countryiso3code in (
-              select countryiso3code from populationresult)
-          order by growth desc
-          limit 3;
-        """
-      q.query[QueryResult].to[List].transact(xa).recoverWith{
-        _ =>
-          Concurrent[F].pure(List())
-      }
-    }
-
-    private def saveToPopulationResultData(data: List[QueryResult]) = {
-      val sql = "insert into populationresult (countryiso3code) values (?)"
-      val trx = Update[DBPopulationData](sql).updateMany(data.map(_.countryiso3code).map(DBPopulationData))
-      val result = trx.transact(xa).recoverWith{ e =>
-        Concurrent[F].pure(0)
-      }
-      result.map(println(_))
       result
     }
 
+    override def top3GDBGrowth(countryList: List[String]): F[List[QueryResult]] = {
+      val inFragment = fr"and p1.countryiso3code  IN (" ++ countryList.map(c => fr"$c").intercalate(fr",") ++ fr")"
+      val q:Fragment =
+        fr"""
+          select p1.countryiso3code, (100.0 * (p2.value - p1.value) / p1.value ) as growth
+          from gdp as p1
+          inner join gdp as p2
+            on p1.countryiso3code = p2.countryiso3code and p1.countryiso3code <> ''""" ++ inFragment ++ fr""" order by growth desc limit 3;"""
 
+      q.query[QueryResult].to[List].transact(xa).recoverWith{
+        error =>
+          println(error.toString)
+          Concurrent[F].pure(List())
+      }
+    }
   }
 }

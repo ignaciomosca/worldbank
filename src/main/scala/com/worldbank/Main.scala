@@ -12,7 +12,7 @@ object Main extends IOApp {
       InitializeDatabase.initialize[IO](xa).unsafeRunSync()
     }
     for {
-      _ <-WorldBankServer.ingestion[IO](xa)
+      _ <-WorldBankServer.process[IO](args.contains("ingestion"), xa)
     } yield ExitCode.Success
   }
 }
