@@ -22,16 +22,30 @@ object Ingestion {
 
     def ingestData: F[Unit] = List(getTotalPopulationData(), getGDPData(), getCountries()).parSequence_
 
-    private def getTotalPagesForPopulationRequest() = {
-      println("Pages for getTotalPagesForPopulationRequest")
-      val request = Request[F](Method.GET, totalPopulationUri.withQueryParam("format", "json").withQueryParam("page", "1"))
-      val result = client
-        .expect[WorldBankPopulationData](request).map(_.pageStats.pages).map(n => 1 to n).map(_.toList)
-        .recoverWith{ e=>
-          println(s"Error getting Pages for getTotalPagesForPopulationRequest. Error ${e.toString}")
-            Concurrent[F].pure(List())
+    def getTotalPopulationData(page: Int = 1): F[List[Int]] = {
+      println("Total population")
+      val request = Request[F](Method.GET, totalPopulationUri.withQueryParam("format", "json").withQueryParam("page", page))
+      val result = client.expect[WorldBankPopulationData](request)
+      result flatMap { populationData =>
+        if (populationData.pageStats.page <= populationData.pageStats.pages) {
+          repo.savePopulationData(populationData.populationData).flatMap(_ => getTotalPopulationData(page + 1))
+        } else {
+          Concurrent[F].pure(List())
         }
-      result
+      }
+    }
+
+    def getGDPData(page: Int = 1): F[List[Int]] = {
+      println("Total GDP")
+      val request = Request[F](Method.GET, gdpUri.withQueryParam("format", "json").withQueryParam("page", page))
+      val result = client.expect[WorldBankGDPData](request)
+      result flatMap { gdpData =>
+        if (gdpData.pageStats.page <= gdpData.pageStats.pages) {
+          repo.saveGDPData(gdpData.populationData).flatMap(_ => getGDPData(page + 1))
+        } else {
+          Concurrent[F].pure(List())
+        }
+      }
     }
 
     def getCountries(page: Int = 1): F[List[Int]] = {
@@ -39,63 +53,12 @@ object Ingestion {
       val request = Request[F](Method.GET, countryUri.withQueryParam("format", "json").withQueryParam("page", page))
       val result = client.expect[WorldBankCountriesData](request)
       result flatMap { worldCountryData =>
-        if(worldCountryData.pageStats.page <= worldCountryData.pageStats.pages) {
+        if (worldCountryData.pageStats.page <= worldCountryData.pageStats.pages) {
           repo.saveCountryData(worldCountryData.data).flatMap(_ => getCountries(page + 1))
         } else {
           Concurrent[F].pure(List())
         }
       }
     }
-
-
-    private def getTotalPagesForGDPRequest() = {
-      val request = Request[F](Method.GET, gdpUri.withQueryParam("format", "json").withQueryParam("page", "1"))
-      client
-        .expect[WorldBankGDPData](request).map(_.pageStats.pages).map(n => 1 to n).map(_.toList)
-        .recoverWith{ e=>
-          Concurrent[F].pure(List())
-        }
-    }
-
-    private def getTotalPopulationRequest(page: Int) = {
-      println(s"Page $page")
-      val request = Request[F](Method.GET, totalPopulationUri.withQueryParam("format", "json").withQueryParam("page", page.toString))
-      client
-        .expect[WorldBankPopulationData](request).flatMap(data => repo.savePopulationData(data.populationData))
-        .recoverWith{
-          case InvalidMessageBodyFailure(details, _) =>
-            println(s"Failed getTotalPopulationRequest. Error $details")
-            Concurrent[F].pure(0)
-        }
-    }
-
-    private def getTotalGDPRequest(page: Int) = {
-      val request = Request[F](Method.GET, gdpUri.withQueryParam("format", "json").withQueryParam("page", page.toString))
-      client
-        .expect[WorldBankGDPData](request).flatMap(data => repo.saveGDPData(data.populationData))
-        .recoverWith{ e=>
-          println(s"Failed getTotalGDPRequest. Error ${e.toString}")
-        Concurrent[F].pure(0)
-      }
-    }
-
-    //Returns all the data from the SP.POP.TOTL
-    def getTotalPopulationData() = {
-      println("Total population")
-      getTotalPagesForPopulationRequest().flatMap {list => list.map{
-          page => getTotalPopulationRequest(page)
-        }.sequence
-      }
-    }
-
-    //Returns all the repositories from an organization
-    def getGDPData(): F[List[Int]] = {
-      println("Total GDP data")
-        getTotalPagesForGDPRequest().flatMap {list => list.map{
-          page => getTotalGDPRequest(page)
-        }.sequence
-      }
-    }
-
   }
 }
