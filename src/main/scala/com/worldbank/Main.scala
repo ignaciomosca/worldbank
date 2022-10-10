@@ -6,13 +6,11 @@ import doobie.util.transactor.Transactor
 
 object Main extends IOApp {
   def run(args: List[String]) = {
-    val xa = Transactor.fromDriverManager[IO]("org.sqlite.JDBC", "jdbc:sqlite:worldbank.db", "", "")
-    if(args.headOption.exists(_.equals("resetdatabase"))) {
-      println("Resetting database")
-      InitializeDatabase.initialize[IO](xa).unsafeRunSync()
-    }
     for {
-      _ <-WorldBankServer.process[IO](args.contains("ingestion"), xa)
+      config <- ServerConfig.load()
+      xa = Transactor.fromDriverManager[IO]("org.sqlite.JDBC", config.url, config.username, config.pass)
+      _ = if(args.headOption.exists(_.equals("resetdatabase"))) {InitializeDatabase.initialize[IO](xa).unsafeRunSync()} else { () }
+      _<-WorldBankServer.process[IO](args.contains("ingestion"), xa)
     } yield ExitCode.Success
   }
 }

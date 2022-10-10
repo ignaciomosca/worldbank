@@ -20,7 +20,6 @@ object Ingestion {
     val totalPopulationUri = baseUri / "SP.POP.TOTL"
     val gdpUri = baseUri / "NY.GDP.MKTP.CD"
 
-
     def ingestData: F[Unit] = List(getTotalPopulationData(), getGDPData(), getCountries()).parSequence_
 
     private def getTotalPagesForPopulationRequest() = {
@@ -35,26 +34,19 @@ object Ingestion {
       result
     }
 
-    def getTotalCountriesRequest() = {
-      val request = Request[F](Method.GET, countryUri.withQueryParam("format", "json").withQueryParam("page", "1"))
-      val result = client
-        .expect[WorldBankCountriesData](request).map(_.pageStats.pages).map(n => 1 to n).map(_.toList)
-        .recoverWith { e =>
-          println(s"Error getting Pages for getCountries. Error ${e.toString}")
+    def getCountries(page: Int = 1): F[List[Int]] = {
+      println(s"Page Country $page")
+      val request = Request[F](Method.GET, countryUri.withQueryParam("format", "json").withQueryParam("page", page))
+      val result = client.expect[WorldBankCountriesData](request)
+      result flatMap { worldCountryData =>
+        if(worldCountryData.pageStats.page <= worldCountryData.pageStats.pages) {
+          repo.saveCountryData(worldCountryData.data).flatMap(_ => getCountries(page + 1))
+        } else {
           Concurrent[F].pure(List())
         }
-      result
+      }
     }
 
-    private def getCountryRequest(page: Int) = {
-      val request = Request[F](Method.GET, countryUri.withQueryParam("format", "json").withQueryParam("page", page.toString))
-      client
-        .expect[WorldBankCountriesData](request).flatMap(worldCountryData => repo.saveCountryData(worldCountryData.data))
-        .recoverWith { e =>
-          println(s"Failed getCountryRequest. Error ${e.toString}")
-          Concurrent[F].pure(0)
-        }
-    }
 
     private def getTotalPagesForGDPRequest() = {
       val request = Request[F](Method.GET, gdpUri.withQueryParam("format", "json").withQueryParam("page", "1"))
@@ -105,12 +97,5 @@ object Ingestion {
       }
     }
 
-    def getCountries(): F[List[Int]] = {
-      println("Total Country data")
-      getTotalCountriesRequest().flatMap { list => list.map {
-          page => getCountryRequest(page)
-        }.sequence
-      }
-    }
   }
 }

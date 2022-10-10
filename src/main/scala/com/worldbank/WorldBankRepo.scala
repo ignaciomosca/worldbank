@@ -25,8 +25,8 @@ object WorldBankRepo {
     override def saveCountryData(countryData: List[CountryData]): F[Int] = {
       val sql = "insert into countries (countryiso3code, name, capitalCity, latitude, longitude) values (?, ?, ?, ?, ?)"
       val trx = Update[DBCountryData](sql).updateMany(countryData.map(DBEntities.toDBCountryData))
-      trx.transact(xa).recoverWith { _ =>
-        Concurrent[F].pure(0)
+      trx.transact(xa).recoverWith { error =>
+        Concurrent[F].raiseError(new RuntimeException(error.getMessage))
       }
     }
 

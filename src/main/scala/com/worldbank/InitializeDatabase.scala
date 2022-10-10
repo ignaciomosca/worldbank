@@ -7,6 +7,7 @@ import doobie.util.transactor.Transactor
 
 object InitializeDatabase {
   def initialize[F[_]: Async](xa: Transactor[F]) = {
+    println("Resetting database")
 
     val dropPopulation = sql"""DROP TABLE IF EXISTS population""".update
 

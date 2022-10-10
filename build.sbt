@@ -27,7 +27,8 @@ lazy val root = (project in file("."))
       "ch.qos.logback"        % "logback-classic"      % LogbackVersion,
       "org.xerial"            % "sqlite-jdbc"          % "3.23.1",
       "org.typelevel"         %% "log4cats-core"       % "2.4.0",
-      "org.typelevel"         %% "log4cats-slf4j"      % "2.4.0"
+      "org.typelevel"         %% "log4cats-slf4j"      % "2.4.0",
+      "com.github.pureconfig" %% "pureconfig" % "0.17.1"
     ),
     addCompilerPlugin("org.typelevel" %% "kind-projector"     % "0.10.3"),
     addCompilerPlugin("com.olegpy"    %% "better-monadic-for" % "0.3.0")
