@@ -35,6 +35,7 @@ object Ingestion {
       }
     }
 
+
     def getGDPData(page: Int = 1): F[List[Int]] = {
       println("Total GDP")
       val request = Request[F](Method.GET, gdpUri.withQueryParam("format", "json").withQueryParam("page", page))

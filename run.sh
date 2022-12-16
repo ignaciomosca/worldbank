@@ -19,18 +19,16 @@ help()
 
 dataingestion()
 {
-     java -jar ./target/scala-2.13/worldbank.jar resetdatabase &
+     java -jar ./target/scala-2.13/worldbank.jar resetdatabase ingestion
      sleep 5
-     curl http://localhost:8080/ingestion
      exit 0
 }
 
 dataresults()
 {
-     java -jar ./target/scala-2.13/worldbank.jar &
-     sleep 5
      echo "Year to Year Population Growth and Year to Year GDP Growth"
-     curl http://localhost:8080/query
+     java -jar ./target/scala-2.13/worldbank.jar results
+     sleep 5
      exit 0
 }
 

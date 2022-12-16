@@ -9,6 +9,7 @@ object Main extends IOApp {
     for {
       config <- ServerConfig.load()
       xa = Transactor.fromDriverManager[IO]("org.sqlite.JDBC", config.url, config.username, config.pass)
+      //TODO use flyweight
       _ = if(args.headOption.exists(_.equals("resetdatabase"))) {InitializeDatabase.initialize[IO](xa).unsafeRunSync()} else { () }
       _<-WorldBankServer.process[IO](args.contains("ingestion"), xa)
     } yield ExitCode.Success
