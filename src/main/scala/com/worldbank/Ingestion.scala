@@ -13,7 +13,7 @@ trait Ingestion[F[_]] {
 }
 
 object Ingestion {
-  def impl[F[_]: Concurrent: Parallel](client: Client[F], repo: WorldBankRepo[F]): Ingestion[F] = new Ingestion[F] {
+  def impl[F[_] : Concurrent : Parallel](client: Client[F], repo: WorldBankRepo[F]): Ingestion[F] = new Ingestion[F] {
     val baseUri = uri"https://api.worldbank.org/v2/country/all/indicator"
     val countryUri = uri"https://api.worldbank.org/v2/country"
 
@@ -55,7 +55,7 @@ object Ingestion {
       val result = client.expect[WorldBankCountriesData](request)
       result flatMap { worldCountryData =>
         if (worldCountryData.pageStats.page <= worldCountryData.pageStats.pages) {
-          repo.saveCountryData(worldCountryData.data).flatMap(_ => getCountries(page + 1))
+          repo.saveCountryData(worldCountryData.data.filterNot(_.capitalCity.isEmpty)).flatMap(_ => getCountries(page + 1))
         } else {
           Concurrent[F].pure(List())
         }
